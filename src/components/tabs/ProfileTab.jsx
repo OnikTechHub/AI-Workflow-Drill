@@ -1,32 +1,19 @@
-import React, { useRef, useState } from 'react'
-import {
-  Upload,
-  Trash2,
-  Check,
-  CheckCircle,
-  Globe,
-  Mail,
-  Building,
-  Briefcase,
-  MapPin,
-  Clock,
-  Sparkles,
-  Link as LinkIcon
-} from 'lucide-react'
+import React, { useRef } from 'react'
+import { Upload, Trash2, Camera } from 'lucide-react'
 import { useSettings } from '../../context/SettingsContext'
+import { UserSettingsForm } from '../settings/UserSettingsForm'
+import { ToastProvider } from '../settings/ui/Toast'
 
 export default function ProfileTab() {
   const {
     settings,
     updateField,
     presetAvatars,
-    addToast
+    addToast,
   } = useSettings()
 
   const { profile } = settings
   const fileInputRef = useRef(null)
-  const [emailModalOpen, setEmailModalOpen] = useState(false)
-  const [newEmailInput, setNewEmailInput] = useState('')
 
   const handleAvatarFileUpload = (e) => {
     const file = e.target.files?.[0]
@@ -38,7 +25,7 @@ export default function ProfileTab() {
       const reader = new FileReader()
       reader.onloadend = () => {
         updateField('profile', 'avatar', reader.result)
-        addToast('Profile picture updated successfully!', 'success')
+        addToast('Profile photo updated successfully', 'success')
       }
       reader.readAsDataURL(file)
     }
@@ -46,457 +33,163 @@ export default function ProfileTab() {
 
   const handleResetAvatar = () => {
     updateField('profile', 'avatar', presetAvatars[0])
-    addToast('Avatar reset to default preset.', 'info')
+    addToast('Avatar reset to default preset', 'info')
   }
 
-  const handleSaveEmail = (e) => {
-    e.preventDefault()
-    if (!newEmailInput || !newEmailInput.includes('@')) {
-      addToast('Please enter a valid email address', 'error')
-      return
-    }
-    updateField('profile', 'email', newEmailInput)
-    setEmailModalOpen(false)
-    setNewEmailInput('')
-    addToast('Verification link sent to ' + newEmailInput, 'success')
+  // Extract pure GitHub handle if a full URL was stored
+  const githubHandle = (profile.github || '')
+    .replace(/^https?:\/\/github\.com\//, '')
+    .replace(/\/$/, '')
+
+  const initialFormValues = {
+    fullName: profile.displayName || `${profile.firstName} ${profile.lastName}`.trim(),
+    username: profile.username || 'alexchen',
+    email: profile.email || 'alex.chen@apexstudio.io',
+    secondaryEmail: 'alex.backup@gmail.com',
+    jobTitle: profile.role || 'Principal Staff Engineer',
+    organization: profile.company || 'Apex Studio AI',
+    bio: profile.bio || 'Building next-generation developer tooling, multi-agent workflows, and high-performance interactive web systems.',
+    timezone: profile.timezone || 'America/Los_Angeles',
+    country: 'US',
+    website: profile.website || 'https://alexchen.dev',
+    github: githubHandle || 'alexchen-dev',
+    themePreference: settings.appearance?.theme || 'dark',
+    profileVisibility: 'team',
+    notifications: {
+      securityAlerts: true,
+      mentionNotifications: true,
+      productUpdates: false,
+      weeklyDigest: true,
+    },
+    twoFactorAuth: settings.security?.twoFactorEnabled ?? true,
+  }
+
+  const handleFormSaveSuccess = (data) => {
+    // Sync with global SettingsContext
+    const nameParts = data.fullName.trim().split(' ')
+    const firstName = nameParts[0] || ''
+    const lastName = nameParts.slice(1).join(' ') || ''
+
+    updateField('profile', 'firstName', firstName)
+    updateField('profile', 'lastName', lastName)
+    updateField('profile', 'displayName', data.fullName)
+    updateField('profile', 'username', data.username)
+    updateField('profile', 'email', data.email)
+    updateField('profile', 'role', data.jobTitle)
+    updateField('profile', 'company', data.organization)
+    updateField('profile', 'bio', data.bio)
+    updateField('profile', 'timezone', data.timezone)
+    if (data.website) updateField('profile', 'website', data.website)
+    if (data.github) updateField('profile', 'github', `https://github.com/${data.github}`)
   }
 
   return (
-    <div className="settings-content-area">
-      <div className="section-header">
-        <h2 className="section-title">Profile Information</h2>
-        <p className="section-desc">
-          Manage your personal details, public persona, and how team members identify you across the workspace.
-        </p>
-      </div>
-
-      {/* Avatar Card */}
-      <section className="settings-card" id="card-avatar">
-        <div className="card-title-group">
-          <div>
-            <h3 className="card-title">Profile Photo</h3>
-            <p className="card-subtitle">
-              Your photo appears on your profile, comments, team activity, and audit logs.
+    <ToastProvider>
+      <div className="space-y-8 pb-12">
+        {/* Avatar Uploader Card */}
+        <section
+          aria-labelledby="card-avatar-heading"
+          className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-5 sm:p-6"
+        >
+          <div className="border-b border-neutral-800 pb-3 mb-6">
+            <h2 id="card-avatar-heading" className="text-base font-semibold text-white flex items-center gap-2">
+              <Camera className="w-4 h-4 text-indigo-400" aria-hidden="true" />
+              <span>Profile Photo & Avatar</span>
+            </h2>
+            <p className="text-xs text-neutral-400 mt-0.5">
+              Your avatar identifies your commits, agent sessions, and team reviews.
             </p>
           </div>
-        </div>
 
-        <div className="avatar-uploader-card">
-          <div className="avatar-preview-container">
-            <img
-              src={profile.avatar}
-              alt={profile.displayName}
-              className="avatar-preview-img"
-            />
-            <div
-              className="avatar-upload-overlay"
-              onClick={() => fileInputRef.current?.click()}
-              title="Click to upload"
-            >
-              <Upload size={20} />
-              <span style={{ fontSize: '10px', marginTop: '4px' }}>Change</span>
-            </div>
-          </div>
-
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleAvatarFileUpload}
-            accept="image/*"
-            style={{ display: 'none' }}
-            id="avatar-file-input"
-          />
-
-          <div className="avatar-actions">
-            <div className="avatar-actions-buttons">
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+            <div className="relative group shrink-0">
+              <img
+                src={profile.avatar}
+                alt={`${profile.displayName || 'User'}'s avatar`}
+                className="w-24 h-24 rounded-2xl object-cover border-2 border-neutral-700 shadow-md group-hover:border-indigo-500 transition-colors"
+              />
               <button
                 type="button"
-                id="btn-upload-avatar"
-                className="btn btn-sm btn-primary"
                 onClick={() => fileInputRef.current?.click()}
+                aria-label="Change profile photo"
+                className="absolute inset-0 bg-neutral-950/70 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center rounded-2xl transition-opacity text-white text-xs font-medium cursor-pointer"
               >
-                <Upload size={14} />
-                Upload New Image
-              </button>
-              <button
-                type="button"
-                id="btn-reset-avatar"
-                className="btn btn-sm btn-secondary"
-                onClick={handleResetAvatar}
-              >
-                <Trash2 size={14} />
-                Reset
+                <Upload className="w-5 h-5 mb-1" aria-hidden="true" />
+                <span>Upload</span>
               </button>
             </div>
 
-            <div>
-              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                Or select an instant preset:
-              </span>
-              <div className="avatar-presets">
-                {presetAvatars.map((url, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    className={`avatar-preset-btn ${profile.avatar === url ? 'active' : ''}`}
-                    onClick={() => {
-                      updateField('profile', 'avatar', url)
-                      addToast('Preset avatar selected', 'info')
-                    }}
-                    title={`Select avatar preset ${idx + 1}`}
-                  >
-                    <img src={url} alt={`Preset ${idx + 1}`} />
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Basic Info Card */}
-      <section className="settings-card" id="card-basic-info">
-        <div className="card-title-group">
-          <div>
-            <h3 className="card-title">Personal Details</h3>
-            <p className="card-subtitle">
-              Basic identification information used across workspaces.
-            </p>
-          </div>
-        </div>
-
-        <div className="form-grid-2">
-          <div className="form-group">
-            <label className="form-label" htmlFor="first-name">
-              First Name
-            </label>
             <input
-              type="text"
-              id="first-name"
-              className="form-input"
-              value={profile.firstName}
-              onChange={(e) => updateField('profile', 'firstName', e.target.value)}
-              placeholder="e.g. Onik"
+              type="file"
+              ref={fileInputRef}
+              onChange={handleAvatarFileUpload}
+              accept="image/*"
+              className="sr-only"
+              id="avatar-file-input"
+              aria-label="Upload profile photo file"
             />
-          </div>
 
-          <div className="form-group">
-            <label className="form-label" htmlFor="last-name">
-              Last Name
-            </label>
-            <input
-              type="text"
-              id="last-name"
-              className="form-input"
-              value={profile.lastName}
-              onChange={(e) => updateField('profile', 'lastName', e.target.value)}
-              placeholder="e.g. Das"
-            />
-          </div>
-        </div>
-
-        <div className="form-grid-2">
-          <div className="form-group">
-            <label className="form-label" htmlFor="display-name">
-              Display Name
-            </label>
-            <input
-              type="text"
-              id="display-name"
-              className="form-input"
-              value={profile.displayName}
-              onChange={(e) => updateField('profile', 'displayName', e.target.value)}
-              placeholder="How your name appears to colleagues"
-            />
-            <span className="form-hint">Shown on your public profile and workspace cards.</span>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="username">
-              Username
-            </label>
-            <div className="form-input-wrap">
-              <span className="input-icon-left" style={{ fontWeight: 600 }}>@</span>
-              <input
-                type="text"
-                id="username"
-                className="form-input has-icon-left"
-                value={profile.username}
-                onChange={(e) => updateField('profile', 'username', e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
-                placeholder="handle"
-              />
-            </div>
-            <span className="form-hint success">
-              <CheckCircle size={12} /> https://apex.flyrank.ai/@{profile.username}
-            </span>
-          </div>
-        </div>
-
-        {/* Email with Verified status & change button */}
-        <div className="form-group">
-          <label className="form-label" htmlFor="email">
-            Email Address
-          </label>
-          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-            <div className="form-input-wrap" style={{ flex: 1 }}>
-              <Mail className="input-icon-left" size={16} />
-              <input
-                type="email"
-                id="email"
-                className="form-input has-icon-left"
-                value={profile.email}
-                readOnly
-                style={{ cursor: 'not-allowed', opacity: 0.9 }}
-              />
-            </div>
-            {profile.isEmailVerified && (
-              <span className="nav-badge-pill success" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Check size={12} /> Verified
-              </span>
-            )}
-            <button
-              type="button"
-              id="btn-change-email"
-              className="btn btn-secondary"
-              onClick={() => setEmailModalOpen(true)}
-            >
-              Change Email
-            </button>
-          </div>
-        </div>
-
-        {/* Bio */}
-        <div className="form-group">
-          <div className="form-label">
-            <label htmlFor="bio">About / Bio</label>
-            <span className="char-counter">
-              {profile.bio.length} / 240
-            </span>
-          </div>
-          <textarea
-            id="bio"
-            className="form-textarea"
-            rows={3}
-            maxLength={240}
-            value={profile.bio}
-            onChange={(e) => updateField('profile', 'bio', e.target.value)}
-            placeholder="Write a brief professional summary about yourself..."
-          />
-        </div>
-
-        <div className="card-divider" />
-
-        {/* Professional Details */}
-        <div className="form-grid-2">
-          <div className="form-group">
-            <label className="form-label" htmlFor="role">
-              Job Title / Role
-            </label>
-            <div className="form-input-wrap">
-              <Briefcase className="input-icon-left" size={16} />
-              <input
-                type="text"
-                id="role"
-                className="form-input has-icon-left"
-                value={profile.role}
-                onChange={(e) => updateField('profile', 'role', e.target.value)}
-                placeholder="e.g. Lead Engineer"
-              />
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="company">
-              Company / Organization
-            </label>
-            <div className="form-input-wrap">
-              <Building className="input-icon-left" size={16} />
-              <input
-                type="text"
-                id="company"
-                className="form-input has-icon-left"
-                value={profile.company}
-                onChange={(e) => updateField('profile', 'company', e.target.value)}
-                placeholder="e.g. Flyrank AI"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="form-grid-2">
-          <div className="form-group">
-            <label className="form-label" htmlFor="location">
-              Location
-            </label>
-            <div className="form-input-wrap">
-              <MapPin className="input-icon-left" size={16} />
-              <input
-                type="text"
-                id="location"
-                className="form-input has-icon-left"
-                value={profile.location}
-                onChange={(e) => updateField('profile', 'location', e.target.value)}
-                placeholder="City, Country"
-              />
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="timezone">
-              Timezone
-            </label>
-            <div className="form-input-wrap">
-              <Clock className="input-icon-left" size={16} />
-              <select
-                id="timezone"
-                className="form-select"
-                style={{ paddingLeft: '2.6rem' }}
-                value={profile.timezone}
-                onChange={(e) => updateField('profile', 'timezone', e.target.value)}
-              >
-                <option value="America/Los_Angeles">Pacific Time (US &amp; Canada) UTC-8</option>
-                <option value="America/New_York">Eastern Time (US &amp; Canada) UTC-5</option>
-                <option value="Europe/London">London, Edinburgh GMT+0</option>
-                <option value="Europe/Berlin">Berlin, Paris, Amsterdam GMT+1</option>
-                <option value="Asia/Dhaka">Dhaka, Bangladesh GMT+6</option>
-                <option value="Asia/Tokyo">Tokyo, Japan GMT+9</option>
-                <option value="Australia/Sydney">Sydney, Melbourne GMT+11</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Social Profiles */}
-      <section className="settings-card" id="card-social-links">
-        <div className="card-title-group">
-          <div>
-            <h3 className="card-title">Social &amp; Web Links</h3>
-            <p className="card-subtitle">
-              Connect your online profiles to feature them on your team directory card.
-            </p>
-          </div>
-        </div>
-
-        <div className="form-grid-2">
-          <div className="form-group">
-            <label className="form-label" htmlFor="social-github">GitHub Profile</label>
-            <div className="form-input-wrap">
-              <LinkIcon className="input-icon-left" size={16} />
-              <input
-                type="url"
-                id="social-github"
-                className="form-input has-icon-left"
-                value={profile.github}
-                onChange={(e) => updateField('profile', 'github', e.target.value)}
-                placeholder="https://github.com/username"
-              />
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="social-twitter">X (Twitter)</label>
-            <div className="form-input-wrap">
-              <LinkIcon className="input-icon-left" size={16} />
-              <input
-                type="url"
-                id="social-twitter"
-                className="form-input has-icon-left"
-                value={profile.twitter}
-                onChange={(e) => updateField('profile', 'twitter', e.target.value)}
-                placeholder="https://x.com/username"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="form-grid-2">
-          <div className="form-group">
-            <label className="form-label" htmlFor="social-linkedin">LinkedIn</label>
-            <div className="form-input-wrap">
-              <LinkIcon className="input-icon-left" size={16} />
-              <input
-                type="url"
-                id="social-linkedin"
-                className="form-input has-icon-left"
-                value={profile.linkedin}
-                onChange={(e) => updateField('profile', 'linkedin', e.target.value)}
-                placeholder="https://linkedin.com/in/username"
-              />
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="social-website">Personal Website / Portfolio</label>
-            <div className="form-input-wrap">
-              <Globe className="input-icon-left" size={16} />
-              <input
-                type="url"
-                id="social-website"
-                className="form-input has-icon-left"
-                value={profile.website}
-                onChange={(e) => updateField('profile', 'website', e.target.value)}
-                placeholder="https://yourdomain.com"
-              />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Change Email Modal */}
-      {emailModalOpen && (
-        <div className="modal-backdrop" onClick={() => setEmailModalOpen(false)}>
-          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 className="modal-title">
-                <Mail size={18} /> Update Email Address
-              </h3>
-              <button
-                type="button"
-                className="btn-ghost"
-                onClick={() => setEmailModalOpen(false)}
-                style={{ padding: '4px' }}
-              >
-                ✕
-              </button>
-            </div>
-            <form onSubmit={handleSaveEmail}>
-              <div className="modal-body">
-                <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
-                  A confirmation verification email will be dispatched to your new address. Your current email ({profile.email}) remains active until confirmed.
-                </p>
-                <div className="form-group">
-                  <label className="form-label" htmlFor="modal-new-email">
-                    New Work Email
-                  </label>
-                  <input
-                    type="email"
-                    id="modal-new-email"
-                    className="form-input"
-                    value={newEmailInput}
-                    onChange={(e) => setNewEmailInput(e.target.value)}
-                    placeholder="name@company.com"
-                    autoFocus
-                    required
-                  />
-                </div>
-              </div>
-              <div className="modal-footer">
+            <div className="space-y-4 flex-1 text-center sm:text-left">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
                 <button
                   type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setEmailModalOpen(false)}
+                  id="btn-upload-avatar"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                 >
-                  Cancel
+                  <Upload className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Upload Image</span>
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  Send Verification
+                <button
+                  type="button"
+                  id="btn-reset-avatar"
+                  onClick={handleResetAvatar}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium text-neutral-300 bg-neutral-800 hover:bg-neutral-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400"
+                >
+                  <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Reset to Default</span>
                 </button>
               </div>
-            </form>
+
+              <div>
+                <span className="text-xs text-neutral-400 block mb-2 font-medium">
+                  Or pick an instant preset avatar:
+                </span>
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
+                  {presetAvatars.map((url, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        updateField('profile', 'avatar', url)
+                        addToast('Preset avatar selected', 'info')
+                      }}
+                      aria-label={`Select preset avatar ${idx + 1}`}
+                      className={`relative w-10 h-10 rounded-xl overflow-hidden border-2 transition-all hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                        profile.avatar === url
+                          ? 'border-indigo-500 ring-2 ring-indigo-500/40 shadow-sm'
+                          : 'border-neutral-700 opacity-70 hover:opacity-100'
+                      }`}
+                    >
+                      <img
+                        src={url}
+                        alt={`Preset avatar option ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        </section>
+
+        {/* The Production-Ready, Accessible User Settings Form */}
+        <UserSettingsForm
+          initialValues={initialFormValues}
+          onSaveSuccess={handleFormSaveSuccess}
+        />
+      </div>
+    </ToastProvider>
   )
 }
